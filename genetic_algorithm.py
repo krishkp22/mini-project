@@ -1,212 +1,162 @@
-#! /usr/bin/python3
-
-
-
-import os
-
 import numpy as np
-import matplotlib.pyplot as plt
-
-from plotter import Plotter
-from genetic_algorithm import GeneticAlgorithm
-import trajectory_generation as tg
-from invkin import Arm
-from three_link import Arm3Link
+np.random.seed(1)
 
 
 
-class ProblemParams:
-	"""A struct like class to store problem parameters"""
-	def __init__(self, description=None, link_lengths=None, start_cood=None, end_cood=None, obs_coods=None):
-		self.description = description
-		self.link_lengths = link_lengths
-		self.start_cood = start_cood
-		self.end_cood = end_cood
-		self.obs_coods = obs_coods
+class GeneticAlgorithm:
+    
+    def __init__(self, link_lengths, start_cood, end_cood, obs_coods, fitness, mu=[0.4,0.2], epsilon=0.1, population_size=120, mutation_percent=0.05, crossover_percent=0.30, generations=500):
+        self.L1 = link_lengths[0]
+        self.L2 = link_lengths[1]
+        
+        self.start_cood = start_cood
+        self.end_cood = end_cood
+        self.obs_coods = obs_coods
+        self.fitness = fitness # fitenss function, takes population as input
+        self.mu = mu
+        self.epsilon = epsilon
+
+        self.fitness_params = (link_lengths, start_cood, end_cood, obs_coods, epsilon, mu)
+
+        self.L = 12
+        self.x_min = 0                   
+        self.x_max = pow(2,self.L)-1          
+        self.y_min = 0                   
+        self.y_max = pow(2,self.L)-1          
+        
+        self.R1 = sum(link_lengths)
+        self.R2 = self.L1
+        if self.R2 < 0: self.R2 = 0
+
+        self.population_size = population_size
+        self.mutation_percent = mutation_percent
+        self.crossover_percent = crossover_percent
+        self.generations = generations
+        self.k = self.n_obstacles_interior() + 1
+
+        self.fitness_stats = []
 
 
-preset_params = [
-	ProblemParams("Two links, two obstacles", [4,4], [6.5,2.8], [-3.3,5.1], [[-0,5.3],[5.4,3.2]]),
-	ProblemParams("Two links, three obstacles", [4,4], [7,2.6], [-5,2.8], [[5,3.8],[1.7,5.8],[-2.5,5.8]]),
-	#ProblemParams("Three links, two obstacles", [4,4,3], [8.1,4.9], [-7,5.8], [[5.5,7.7],[2.8,8.5]]),
-	#ProblemParams("Three links, three obstacles", [4,4,3], [8.1,4.9], [-7,5.8], [[5.5,7.7],[2,9],[-2.8,8.5]]),
-	ProblemParams("Three links, three obstacles", [4,4,3], [8.1,4.9], [-7,5.8], [[0,9],[-1,8],[1,8],[0,7]]),
-
-]
-
-
-def select_param_method():
-	# Clear terminal on win, linux
-	os.system('cls' if os.name == 'nt' else 'clear')
-	print("Trajectory Planning for Manipulator Using Genetic Algorithm\n")
-	print("Select problem parameters:")
-	print("  1: Choose from presets")
-	print("  2: Custom")
-	print("\n  q: Quit")
-
-	choice = None
-	while choice == None:
-		choice = input("Choice: ")
-		if choice == 'q':
-			return 'q'
-		elif choice.isdigit() and 1 <= int(choice) <= 2:
-			choice = int(choice)
-		else:
-			print("Invalid input!")
-			choice = None
-	return choice
+    def n_obstacles_interior(self):
+        if len(self.obs_coods) == 0:
+            return 0
+        obs_coods = np.array(self.obs_coods)
+        x_interior = obs_coods[:,0]
+        y_interior = obs_coods[:,1]
+        distance = np.sqrt(x_interior**2+y_interior**2) #distance of interior point from centre
+        #taking only valid interior points (i.e. points between R1 and R2)
+        
+        distance = (distance<self.R1)
+        return len(distance[distance==True])
 
 
-def select_preset_param(preset_params):
-	# Clear terminal on win, linux
-	os.system('cls' if os.name == 'nt' else 'clear')
-	print("Robotic arm trajectory using Genetic Algorithm\n")
-	print("Select a preset problem:")
-	for i,param in enumerate(preset_params):
-		print("  {0}: {1}".format(i+1, param.description))
-	print("\n  q: Quit")
-	
-	choice = None
-	while choice == None:
-		choice = input("Choice: ")
-		if choice == 'q':
-			return 'q'
-		elif choice.isdigit() and 1 <= int(choice) <= len(preset_params):
-			choice = int(choice)
-		else:
-			print("Invalid input!")
-			choice = None
-	return choice-1
+    def chromosome_to_points(self, chromosome):
+        return (chromosome)*(2*self.R1)/(2**self.L-1) - self.R1
 
 
-def select_link_lengths():
-	# Clear terminal on win, linux
-	os.system('cls' if os.name == 'nt' else 'clear')
-	print("Robotic arm trajectory using Genetic Algorithm\n")
-	
-	links_num = None
-	link_lengths = None
-	
-	while links_num == None:
-		links_num = input("Number of links:  ")
-		if links_num == 'q':
-			return 'q'
-		elif links_num.isdigit():
-			links_num = int(links_num)
-			if links_num < 2 or links_num > 3:
-				print("Invalid input! Enter two or three")
-				links_num = None
-		else:
-			print("Invalid input!")
-			links_num = None
+    def chromosome_init(self):
+        chromosome = np.zeros((self.population_size,2*self.k))
+        # print(chromosome)
 
-	link_lengths = []
-	for i in range(links_num):
-		link_length = None
+        centre_cood = [2**(self.L-1)-1, 2**(self.L-1)-1]
+        distance_max = (self.x_max+1)/2
+        distance_min = self.R2/self.R1*distance_max
+        
+        for i,chrom in enumerate(chromosome):
+            chrom_valid = False
+            
+            while chrom_valid == False:
+                # random_chrom = np.random.randint(2**self.L,size=[self.k,2])
+                random_chrom_x = np.random.randint(2**self.L,size=[self.k])
+                random_chrom_y = np.random.randint(2**(self.L-1),size=[self.k]) + 2**(self.L-1)
+                random_chrom = np.column_stack((random_chrom_x,random_chrom_y))
 
-		while link_length == None:
-			link_length = input("Length of link {0}: ".format(i+1))
-			if link_length == 'q':
-				return 'q'
-			elif link_length.isdigit():
-				link_length = int(link_length)
-				link_lengths.append(link_length)
-			else:
-				print("Invalid input!")
-				link_length = None
+                distance = np.sqrt((random_chrom[:,0]-centre_cood[0])**2+(random_chrom[:,1]-centre_cood[1])**2)
 
-	return link_lengths
+                if np.all(distance_min < distance) and np.all(distance_max > distance):
+                    chrom_valid = True
+                    chromosome[i] = np.ravel(random_chrom)
+
+        return chromosome
 
 
-
-while True:
-
-	
-	plotter = Plotter()
-
-	link_lengths = None
-	start_cood = None
-	end_cood = None
-	obs_coods = None
-
-	ga_genr_2 = 300
-	ga_genr_3 = 20
-	ga_genr = 10
-	ga_pop_sz = 40
-	ga_mut_ratio = 0.05
-	ga_xov_ratio = 0.30
-	ga_mu_2 = [0.5,0.5]
-	ga_mu_3 = [0.4,0.3,0.3]
-	ga_mu = None
-	ga_eps = 0.1
-
-	param_method = select_param_method()
-
-	if param_method == 'q':
-		break
-
-	elif param_method == 1:
-		param_idx = select_preset_param(preset_params)
-		
-		if param_idx == 'q':
-			break
-
-		else:
-			link_lengths = preset_params[param_idx].link_lengths
-			start_cood = preset_params[param_idx].start_cood
-			end_cood = preset_params[param_idx].end_cood
-			obs_coods = preset_params[param_idx].obs_coods
-
-			plotter.link_lengths = link_lengths
-			plotter.start_cood = start_cood
-			plotter.end_cood = end_cood
-			plotter.obs_coods = obs_coods
-
-			plotter.static_show()
+    def fitness_mod(self,chromosome):
+        fitness_row, _ = self.fitness(self.chromosome_to_points(chromosome), *self.fitness_params)
+        for i,v in enumerate(fitness_row):
+            if np.isnan(v):
+                fitness_row[i] = 0
+            else:
+                fitness_row[i] = abs(v)
+        return fitness_row
 
 
-	elif param_method == 2:
-		link_lengths = select_link_lengths()
+    def run(self):
+        chromosome = self.chromosome_init()    #getting initial random chromosome
+        # print(chromosome)
 
-		if link_lengths == 'q':
-			break
+        # fitness_row = self.fitness(self.chromosome_to_points(chromosome), *self.fitness_params)    #return a matrix which has fitness of respective input chromosomes
+        fitness_row = self.fitness_mod(chromosome)
+        r=1
+        # fitness_row = np.random.rand(self.population_size)  #remove it later on
+        # print(fitness_row)
 
-		plotter.link_lengths = link_lengths
-		
-		plotter.picker_show()
-		
-		start_cood = plotter.start_cood
-		end_cood = plotter.end_cood
-		obs_coods = plotter.obs_coods
+        # s = 0
+        # while(s<self.generations):
+        for genr in range(self.generations):
+            
+            print("New generation: "+str(r), end="\n", flush=True)
+            r=r+1
+            roulette_wheel_cdf = np.cumsum(fitness_row/np.sum(fitness_row))    #cdf 
+            crossover_point = np.random.randint(self.k-1) if self.k != 1 else 0                      #random crossover point 
+            index = np.zeros((2))
+            new_chromosome = np.zeros((self.population_size,2*self.k))
 
-		if len(obs_coods) < 2:
-			print("Select atleast two obstacles!")
-			continue
+            for i in range(int(self.population_size/2)):                  #crossover
 
+                a = np.random.rand(2)
+                index = np.searchsorted(roulette_wheel_cdf, a)  
+                parent = np.array([chromosome[index[0]], chromosome[index[1]]])
 
-	os.system('cls' if os.name == 'nt' else 'clear')
-	print("Robotic arm trajectory using Genetic Algorithm\n")
-	print("Running genetic algorithm... ")
+                if np.random.rand() < self.crossover_percent:
+                    new_chromosome[2*i+0,0:2*crossover_point+1] = parent[0,0:2*crossover_point+1]
+                    new_chromosome[2*i+0,2*crossover_point+1:2*self.k] = parent[1,2*crossover_point+1:2*self.k]
+                    new_chromosome[2*i+1,0:2*crossover_point+1] = parent[1,0:2*crossover_point+1]
+                    new_chromosome[2*i+1,2*crossover_point+1:2*self.k] = parent[0,2*crossover_point+1:2*self.k]
+                else:
+                    new_chromosome[2*i+0] = parent[0]
+                    new_chromosome[2*i+1] = parent[1]
 
-	ga_mu = ga_mu_2 if len(link_lengths) == 2 else ga_mu_3
-	ga_genr = ga_genr_2 if len(link_lengths) == 2 else ga_genr_3
+            # print(new_chromosome)
 
-	ga = GeneticAlgorithm(link_lengths, start_cood, end_cood, obs_coods, tg.fitness_population, ga_mu, ga_eps, ga_pop_sz, ga_mut_ratio, ga_xov_ratio, ga_genr)
-	output_chr = ga.run()
-	print("Done")
+            for i in range(self.population_size):                                 #mutation
+                if (np.random.rand() < self.mutation_percent):
+                    p = np.random.randint(12*2*self.k)
+                    q = int(np.floor(p/12))
+                    p = int(p - 12*q)
 
-	output_path = tg.chrome_traj(output_chr, start_cood, end_cood)
+                    binary = list(np.binary_repr(int(new_chromosome[i,q]),12))
+                    #flipping the pth binary place
+                    if (binary[p] == '0'):
+                        binary[p] = '1'
+                    elif (binary[p] == '1'):
+                        binary[p] = '0'
+                    binary_string = "".join(binary)            
+                    new_chromosome[i,q] = int(binary_string,2)
 
-	arm = Arm(link_lengths) if len(link_lengths) == 2 else Arm3Link(np.array(link_lengths))
-	link_angles_series = np.degrees(arm.time_series(output_path))
+            chromosome = new_chromosome
+            # s = s+1               #incrementing generation
 
-	#plt.plot(ga.fitness_stats)
-	#plt.show()
-	
-	plotter.transition_show(link_angles_series)
+            # fitness_row = self.fitness(self.chromosome_to_points(chromosome), *self.fitness_params)    #return a matrix which has fitness of respective input chromosomes
+            fitness_row = self.fitness_mod(chromosome)
+            # fitness_row = np.random.rand(self.population_size)  #remove it later on
+            self.fitness_stats.append(max(fitness_row))
+            # print(fitness_row)
+        
+        print()
 
-	usr_input = input("\nTry again? [y/n] ")
-	if usr_input == 'y':
-		continue
-	else:
-		break
+        # print(chromosome)
+        # fitness_row = self.fitness(chromosome, *self.fitness_params)
+        fitness_row = self.fitness_mod(chromosome)
+        max_idx = np.argmax(fitness_row)
+        return (self.chromosome_to_points(chromosome))[max_idx]
+    
