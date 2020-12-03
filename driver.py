@@ -122,7 +122,7 @@ while True:
 	end_cood = None
 	obs_coods = None
 
-	ga_genr_2 = 300
+	ga_genr_2 = 250
 	ga_genr_3 = 20
 	ga_genr = 10
 	ga_pop_sz = 40
