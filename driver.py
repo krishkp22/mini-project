@@ -1,5 +1,3 @@
-#! /usr/bin/python3
-
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -124,7 +122,7 @@ while True:
 
 	ga_genr_2 = 250
 	ga_genr_3 = 20
-	ga_genr = 10
+	ga_genr = None
 	ga_pop_sz = 40
 	ga_mut_ratio = 0.05
 	ga_xov_ratio = 0.30
