@@ -1,12 +1,8 @@
 #! /usr/bin/python3
 
-
-
 import os
-
 import numpy as np
 import matplotlib.pyplot as plt
-
 from plotter import Plotter
 from genetic_algorithm import GeneticAlgorithm
 import trajectory_generation as tg
@@ -28,8 +24,6 @@ class ProblemParams:
 preset_params = [
 	ProblemParams("Two links, two obstacles", [4,4], [6.5,2.8], [-3.3,5.1], [[-0,5.3],[5.4,3.2]]),
 	ProblemParams("Two links, three obstacles", [4,4], [7,2.6], [-5,2.8], [[5,3.8],[1.7,5.8],[-2.5,5.8]]),
-	#ProblemParams("Three links, two obstacles", [4,4,3], [8.1,4.9], [-7,5.8], [[5.5,7.7],[2.8,8.5]]),
-	#ProblemParams("Three links, three obstacles", [4,4,3], [8.1,4.9], [-7,5.8], [[5.5,7.7],[2,9],[-2.8,8.5]]),
 	ProblemParams("Three links, three obstacles", [4,4,3], [8.1,4.9], [-7,5.8], [[0,9],[-1,8],[1,8],[0,7]]),
 ]
 
@@ -198,9 +192,6 @@ while True:
 
 	arm = Arm(link_lengths) if len(link_lengths) == 2 else Arm3Link(np.array(link_lengths))
 	link_angles_series = np.degrees(arm.time_series(output_path))
-
-	#plt.plot(ga.fitness_stats)
-	#plt.show()
 	
 	plotter.transition_show(link_angles_series)
 
