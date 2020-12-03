@@ -11,20 +11,7 @@ from matplotlib.widgets import Slider, Button, RadioButtons
 
 
 class Plotter():
-	"""docstring for Plotter"""
 
-	"""
-	x_range: A tuple or a list (x_min, x_max) to set graph limits
-	y_range: Similar to x_range, for y axis
-	link_lengths: A list containing lengths of each link, starting
-		from the base.
-	link_angles_init: Initial link angles. Length of list must be
-		equal to link_lengths
-	start_cood: A tuple or list with initial end effector coordinates
-	end_cood: A tuple or list with desired end effector coordinates
-		The above two coordinates are for plotting points only. No
-		caculation of link angles takes place in this class
-	"""
 	def __init__(self):
 		self.link_lengths = None
 		self.link_angles = None
@@ -139,10 +126,6 @@ class Plotter():
 		plt.show()
 
 
-	"""
-	link_angles_series: A time series 2d numpy array. Each element
-		is a link_angles aray, indexed by time
-	"""
 	def transition_plot_base(self, ax, coods_series):
 		self.plot_grids(ax)
 		self.plot_terminals(ax)
@@ -185,15 +168,12 @@ class Plotter():
 		fig,ax = plt.subplots()
 		self.picker_plot_base(ax)
 
-
-		# Remove any previous bindings to start afresh
 		self.start_cood = None
 		self.end_cood = None
 		self.obs_coods = []
 
 		ax_title = ax.set_title("Pick start point")
 
-		# Store the artists for possible future use
 		start_point = None
 		end_point = None
 		obs_points = []
@@ -204,7 +184,6 @@ class Plotter():
 
 		def on_click(event):
 
-			# Ensure left mouse click, within axes bounds
 			if event.button != 1 or event.xdata == None or event.ydata == None:
 				return
 
