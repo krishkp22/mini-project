@@ -43,8 +43,7 @@ class GeneticAlgorithm:
         obs_coods = np.array(self.obs_coods)
         x_interior = obs_coods[:,0]
         y_interior = obs_coods[:,1]
-        distance = np.sqrt(x_interior**2+y_interior**2) #distance of interior point from centre
-        #taking only valid interior points (i.e. points between R1 and R2)
+        distance = np.sqrt(x_interior**2+y_interior**2) 
         
         distance = (distance<self.R1)
         return len(distance[distance==True])
@@ -56,7 +55,6 @@ class GeneticAlgorithm:
 
     def chromosome_init(self):
         chromosome = np.zeros((self.population_size,2*self.k))
-        # print(chromosome)
 
         centre_cood = [2**(self.L-1)-1, 2**(self.L-1)-1]
         distance_max = (self.x_max+1)/2
@@ -66,7 +64,6 @@ class GeneticAlgorithm:
             chrom_valid = False
             
             while chrom_valid == False:
-                # random_chrom = np.random.randint(2**self.L,size=[self.k,2])
                 random_chrom_x = np.random.randint(2**self.L,size=[self.k])
                 random_chrom_y = np.random.randint(2**(self.L-1),size=[self.k]) + 2**(self.L-1)
                 random_chrom = np.column_stack((random_chrom_x,random_chrom_y))
@@ -91,27 +88,19 @@ class GeneticAlgorithm:
 
 
     def run(self):
-        chromosome = self.chromosome_init()    #getting initial random chromosome
-        # print(chromosome)
-
-        # fitness_row = self.fitness(self.chromosome_to_points(chromosome), *self.fitness_params)    #return a matrix which has fitness of respective input chromosomes
+        chromosome = self.chromosome_init()
         fitness_row = self.fitness_mod(chromosome)
         r=1
-        # fitness_row = np.random.rand(self.population_size)  #remove it later on
-        # print(fitness_row)
-
-        # s = 0
-        # while(s<self.generations):
         for genr in range(self.generations):
             
             print("New generation: "+str(r), end="\n", flush=True)
             r=r+1
-            roulette_wheel_cdf = np.cumsum(fitness_row/np.sum(fitness_row))    #cdf 
-            crossover_point = np.random.randint(self.k-1) if self.k != 1 else 0                      #random crossover point 
+            roulette_wheel_cdf = np.cumsum(fitness_row/np.sum(fitness_row))    
+            crossover_point = np.random.randint(self.k-1) if self.k != 1 else 0                       
             index = np.zeros((2))
             new_chromosome = np.zeros((self.population_size,2*self.k))
 
-            for i in range(int(self.population_size/2)):                  #crossover
+            for i in range(int(self.population_size/2)):                 
 
                 a = np.random.rand(2)
                 index = np.searchsorted(roulette_wheel_cdf, a)  
@@ -126,16 +115,14 @@ class GeneticAlgorithm:
                     new_chromosome[2*i+0] = parent[0]
                     new_chromosome[2*i+1] = parent[1]
 
-            # print(new_chromosome)
 
-            for i in range(self.population_size):                                 #mutation
+            for i in range(self.population_size):                                 
                 if (np.random.rand() < self.mutation_percent):
                     p = np.random.randint(12*2*self.k)
                     q = int(np.floor(p/12))
                     p = int(p - 12*q)
 
                     binary = list(np.binary_repr(int(new_chromosome[i,q]),12))
-                    #flipping the pth binary place
                     if (binary[p] == '0'):
                         binary[p] = '1'
                     elif (binary[p] == '1'):
@@ -144,18 +131,11 @@ class GeneticAlgorithm:
                     new_chromosome[i,q] = int(binary_string,2)
 
             chromosome = new_chromosome
-            # s = s+1               #incrementing generation
-
-            # fitness_row = self.fitness(self.chromosome_to_points(chromosome), *self.fitness_params)    #return a matrix which has fitness of respective input chromosomes
             fitness_row = self.fitness_mod(chromosome)
-            # fitness_row = np.random.rand(self.population_size)  #remove it later on
             self.fitness_stats.append(max(fitness_row))
-            # print(fitness_row)
-        
+            
         print()
 
-        # print(chromosome)
-        # fitness_row = self.fitness(chromosome, *self.fitness_params)
         fitness_row = self.fitness_mod(chromosome)
         max_idx = np.argmax(fitness_row)
         return (self.chromosome_to_points(chromosome))[max_idx]
